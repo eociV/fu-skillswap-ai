@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+asyncpg://x:x@localhost:5432/x
+      JWT_SECRET_KEY: c2tpbGxzd2FwLWxvY2FsLWRldi1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktMzJi
+      FPT_API_KEY: dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest tests -q
+
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: skillswap_ai
+          POSTGRES_USER: skillswap_ai
+          POSTGRES_PASSWORD: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U skillswap_ai" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://skillswap_ai:ci@localhost:5432/skillswap_ai
+      JWT_SECRET_KEY: c2tpbGxzd2FwLWxvY2FsLWRldi1zZWNyZXQta2V5LWZvci10ZXN0aW5nLW9ubHktMzJi
+      FPT_API_KEY: dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      # Migration chạy được trên Postgres thật là điều kiện tối thiểu để merge.
+      - run: alembic upgrade head
+      - run: alembic downgrade base

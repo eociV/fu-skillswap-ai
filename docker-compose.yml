@@ -1,0 +1,38 @@
+# AI service tự quản database và bucket riêng — không đụng gì tới Postgres của BE.
+services:
+  ai-postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: skillswap_ai
+      POSTGRES_USER: skillswap_ai
+      POSTGRES_PASSWORD: ${AI_DB_PASSWORD:-change-me}
+    volumes:
+      - ai-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U skillswap_ai -d skillswap_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [skillswap-network]
+
+  ai-service:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://skillswap_ai:${AI_DB_PASSWORD:-change-me}@ai-postgres:5432/skillswap_ai
+    ports:
+      - "8000:8000"
+    depends_on:
+      ai-postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [skillswap-network]
+
+volumes:
+  ai-postgres-data:
+
+# Dùng chung mạng với stack BE để gọi nội bộ (spring-backend:8080) mà không ra internet.
+networks:
+  skillswap-network:
+    external: true
+    name: skillswap-network
